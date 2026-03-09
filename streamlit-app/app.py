@@ -3,17 +3,12 @@ import pandas as pd
 import geopandas as gpd
 from pathlib import Path
 import altair as alt
+import requests, io
 
 #Paths
-# Updated Paths for Streamlit Cloud
 user_path = Path(__file__).parent.resolve()
-# Removed .parent because the 'data' folder is in the root with app.py
 raw_data_path = user_path / "data" / "raw-data" 
 derived_data_path = user_path / "data" / "derived-data"
-
-#Load Data
-#Load Data
-import requests, io
 
 @st.cache_resource
 def load_derived_crime():
@@ -130,8 +125,6 @@ def make_chart(final_data):
         )
     return Chart
 
-
-
 # --- STREAMLIT USER INTERFACE ---
 
 st.set_page_config(page_title="CTA Crime & Ridership Dashboard", layout="wide")
@@ -142,7 +135,7 @@ st.title("🚇 CTA Station Analysis: Crime vs. Ridership")
 tab_analysis, tab_map = st.tabs(["📊 Statistical Analysis", "🗺️ Geographic Map"])
 
 # 1. Global Sidebar Elements (Common to both tabs)
-st.sidebar.header("Scatterplot Filters")
+st.sidebar.header("Global Filters")
 year_range = st.sidebar.slider(
     "Select Year Range",
     min_value=2022,
@@ -154,8 +147,10 @@ start_yr, end_yr = year_range
 # 2. Tab-Specific Sidebar & Content
 with tab_analysis:
     # Sidebar elements for Analysis
+    st.sidebar.divider()
+    st.sidebar.subheader("Scatterplot Filters")
     valid_crimes = sorted(derived_crime[COL_PRIMARY_TYPE].dropna().unique().tolist())
-    crime_options = ["All", "Violent", "Non-Violent"] + valid_crimes
+    crime_options = ["All", "Violent", "Non-Violent"] + [c.title() for c in valid_crimes]
     selected_crime = st.sidebar.selectbox(
         "Select Crime Category/Type", 
         options=crime_options, 
@@ -219,6 +214,8 @@ with tab_map:
 
     # Now 'rides' is guaranteed to be the column from map_filtered_data
     map_plot_df["crime_rate"] = (map_plot_df["crime_count"] / (map_plot_df["rides"] / 100000)).fillna(0)
+    map_plot_df['crime_rate_str'] = map_plot_df['crime_rate'].map('{:.2f}'.format)
+    map_plot_df['rides_str'] = map_plot_df['rides'].map('{:,}'.format)
 
     # Determine Radius based on Selection
     if map_metric == "Total Crimes":
@@ -244,11 +241,18 @@ with tab_map:
     view_state = pdk.ViewState(latitude=41.8781, longitude=-87.6298, zoom=11)
 
     st.subheader(f"CTA Station Hotspots (By {map_metric})")
+
     st.pydeck_chart(pdk.Deck(
         layers=[layer],
         initial_view_state=view_state,
-        tooltip={"text": "Station: {stationname_mapped}\nCrimes: {crime_count}\nRate: {crime_rate:.2f}\nTotal Rides: {rides}"}
-    ))
+        tooltip={
+            "html": "<b>Station:</b> {stationname_mapped}<br/>"
+                    "<b>Crimes:</b> {crime_count}<br/>"
+                    "<b>Rate:</b> {crime_rate_str}<br/>"
+                    "<b>Total Rides:</b> {rides_str}",
+            "style": {"color": "white"}
+        }
+    ))    
 
 
     
